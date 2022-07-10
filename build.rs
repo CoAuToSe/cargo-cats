@@ -1,0 +1,11 @@
+use std::{env, process::Command};
+
+fn main() {
+    let base_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+
+    Command::new("cargo")
+        .arg("fmt")
+        .current_dir(&base_dir)
+        .output()
+        .unwrap();
+}
