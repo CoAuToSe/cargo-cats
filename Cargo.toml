@@ -1,6 +1,6 @@
 [package]
 name = "cargo-cats"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 authors = ["CATS <Aurelien.Couthures@gmail.com>"]
 description = "CATS's"
