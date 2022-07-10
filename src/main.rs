@@ -57,10 +57,10 @@ fn main() {
     }
     #[cfg(feature = "build")]
     {
-        println!("{:?}", env::var_os("CARGO_CRATE_NAME").unwrap());
-        println!("{:?}", env::var_os("OUT_DIR").unwrap());
-        let out_dir = env::var_os("CARGO_MANIFEST_DIR").unwrap();
-        let dest_path = Path::new(&out_dir).join("build.rs");
+        // println!("{:?}", env::var_os("CARGO_CRATE_NAME").unwrap());
+        // println!("{:?}", env::var_os("OUT_DIR").unwrap());
+        // let out_dir = env::var_os("CARGO_MANIFEST_DIR").unwrap();
+        let dest_path = Path::new(&current_dir().unwrap()).join("build.rs");
         if !dest_path.exists() {
             fs::write(
                 &dest_path,
