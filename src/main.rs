@@ -1,9 +1,13 @@
 #![recursion_limit = "256"]
+#[allow(unused_imports)]
 use std::{
     env::{self, *},
-    fs,
+    fs::{self, File},
+    io::{self, Read, Write},
     path::{self, *},
+    process::Command,
 };
+
 macro_rules! show {
     ($a:expr) => {
         println!("{:?}", $a);
@@ -52,7 +56,7 @@ fn main() {
         }
 
         println!();
-        let mut dir = env::temp_dir();
+        let dir = env::temp_dir();
         println!("Temporary directory: {}", dir.display());
     }
     #[cfg(feature = "build")]
@@ -75,9 +79,119 @@ fn main() {
         .current_dir(&base_dir)
         .output()
         .unwrap();
+
+    let rust_toolchain = env::var("RUSTUP_TOOLCHAIN").unwrap();
+    if rust_toolchain.starts_with("stable") {
+        // do nothing
+    } else if rust_toolchain.starts_with("nightly") {
+        //enable the 'nightly-features' feature flag
+        println!("cargo:rustc-cfg=feature=\"nightly-features\"");
+    } else {
+        panic!("Unexpected value for rustc toolchain")
+    }
 }"#,
             )
             .unwrap();
+        }
+    }
+
+    #[cfg(feature = "nightly-features")]
+    {
+        let out_dir = Path::new(&current_dir().unwrap()).join("Cargo.toml");
+        let mut buf = vec![];
+        let len;
+        {
+            let mut file = File::open(&out_dir).unwrap();
+            len = file.read_to_end(&mut buf).unwrap();
+        }
+        let mut elif = String::from_utf8(buf).unwrap();
+
+        let mut listing_feature = false;
+        let mut list_features = vec![];
+        for line in elif.lines() {
+            if listing_feature {
+                // features
+                // println!("{}", line.split("=").into_iter().cycle().next().unwrap());
+                list_features.push(line.split("=").into_iter().cycle().next().unwrap().trim());
+            }
+            if line.trim().starts_with("[") && line.contains("[features]") {
+                listing_feature = true;
+                // balise features
+                // println!("{line}")
+            }
+            if line.trim().starts_with("[") && !line.contains("[features]") {
+                listing_feature = false;
+                // balise
+                // println!("{line}")
+            }
+        }
+        println!("{:?}", list_features);
+        let mut final_list_features = vec![];
+        for features in list_features {
+            final_list_features.push("--cfg".to_string());
+            final_list_features.push(format!("feature=\"{}\"", features.trim()));
+        }
+        final_list_features.push("-Zunpretty=expanded".to_string());
+
+        let rust_toolchain = env::var("RUSTUP_TOOLCHAIN").unwrap();
+        if rust_toolchain.starts_with("stable") {
+            println!("stable toolchain");
+        } else if rust_toolchain.starts_with("nightly") {
+            println!("nightly toolchain");
+            {
+                let src = Path::new(&current_dir().unwrap()).join("src\\");
+                for files in src.read_dir().unwrap() {
+                    let temp = files.ok().unwrap().file_name();
+                    let file_name = temp.to_str().unwrap();
+                    final_list_features.push(file_name.to_string());
+                    let output = Command::new("rustc")
+                        .args(&final_list_features)
+                        .current_dir(&Path::new(&current_dir().unwrap()).join("src\\"))
+                        .output()
+                        .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
+                    println!("{:?}", final_list_features.pop());
+                    if output.status.success() {
+                        let s = String::from_utf8_lossy(&output.stdout);
+
+                        // print!("rustc succeeded and stdout was:\n{}", s);
+
+                        let dest_path = Path::new(&current_dir().unwrap())
+                            .join("pretty\\")
+                            .join(file_name);
+                        fs::create_dir_all("pretty").unwrap();
+                        if !dest_path.exists() {
+                            fs::write(&dest_path, s.as_bytes()).unwrap();
+                        } else {
+                            fs::write(&dest_path, s.as_bytes()).unwrap();
+                        }
+                    } else {
+                        let s = String::from_utf8_lossy(&output.stderr);
+
+                        eprint!("rustc failed and stderr was:\n{}", s);
+                    }
+                }
+            }
+            {
+                let pretty = Path::new(&current_dir().unwrap()).join("pretty\\");
+                for files in pretty.read_dir().unwrap() {
+                    let temp = files.ok().unwrap().file_name();
+                    let file_name = temp.to_str().unwrap();
+                    println!(
+                        "rustfmt {}{file_name}",
+                        Path::new(&current_dir().unwrap())
+                            .join("pretty\\")
+                            .display()
+                    );
+                    Command::new("rustfmt")
+                        .arg(
+                            &Path::new(&current_dir().unwrap())
+                                .join("pretty\\")
+                                .join(file_name),
+                        )
+                        .output()
+                        .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
+                }
+            }
         }
     }
 }
